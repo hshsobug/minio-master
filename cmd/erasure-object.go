@@ -1605,7 +1605,7 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	} else {
 		// sobug: 调用 GetObjectNInfo 方法，将文件放到 /home/minio_test/data
 		log.Println("putObject before getObjectNInfo go")
-		// dstPath := filepath.Join("/home/minio_test/data", object)
+		// 旧 dstPath := filepath.Join("/home/minio_test/data", object)
 		dstPath := opts.Dst
 		log.Printf("putObject before getObjectNInfo dstPath: %s\n", dstPath)
 		// 确保目标目录存在
