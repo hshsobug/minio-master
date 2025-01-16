@@ -24,8 +24,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
+	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -230,7 +233,9 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 		//   however writing the response doesn't need to serialize
 		//   concurrent writers
 		unlockOnDefer = true
-		nsUnlocker = func() { lock.RUnlock(lkctx) }
+		nsUnlocker = func() {
+			lock.RUnlock(lkctx)
+		}
 	}
 
 	fi, metaArr, onlineDisks, err := er.getObjectFileInfo(ctx, bucket, object, opts, true)
@@ -257,6 +262,7 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	}
 
 	if objInfo.Size == 0 {
+		log.Println("Zero byte object") // 添加日志
 		if _, _, err := rs.GetOffsetLength(objInfo.Size); err != nil {
 			// Make sure to return object info to provide extra information.
 			return &GetObjectReader{
@@ -300,7 +306,6 @@ func (er erasureObjects) GetObjectNInfo(ctx context.Context, bucket, object stri
 	if !unlockOnDefer {
 		return fn(pr, h, pipeCloser, nsUnlocker)
 	}
-
 	return fn(pr, h, pipeCloser)
 }
 
@@ -1591,7 +1596,67 @@ func (er erasureObjects) putObject(ctx context.Context, bucket string, object st
 	// we are adding a new version to this object under the namespace lock, so this is the latest version.
 	fi.IsLatest = true
 
-	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
+	objectInfo := fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
+
+	if strings.Contains(object, "buckets/") || strings.Contains(object, "config/") {
+		// 系统内部处理缓存文件等会调用该方法，筛选掉这些文件
+		// log.Println("putObject object:" + object)
+		return objectInfo, nil
+	} else {
+		// sobug: 调用 GetObjectNInfo 方法，将文件放到 /home/minio_test/data
+		log.Println("putObject before getObjectNInfo go")
+		// dstPath := filepath.Join("/home/minio_test/data", object)
+		dstPath := opts.Dst
+		log.Printf("putObject before getObjectNInfo dstPath: %s\n", dstPath)
+		// 确保目标目录存在
+		dir := filepath.Dir(dstPath)
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			// 目录不存在，创建目录
+			err := os.MkdirAll(dir, 0755)
+			if err != nil {
+				return ObjectInfo{}, err
+			}
+		}
+		dstFile, err := os.Create(dstPath)
+		log.Printf("putObject before getObjectNInfo dstFile: %+v\n", dstFile)
+		if err != nil {
+			return ObjectInfo{}, err
+		}
+		defer dstFile.Close()
+		// 创建一个空的 HTTPRangeSpec 实例
+		// rs := &HTTPRangeSpec{}
+		// 创建一个空的 http.Header 实例
+		// h := make(http.Header)
+		// 调用 GetObjectNInfo 获取对象信息
+		// newctx, cancel := context.WithCancel(context.Background())
+		// defer cancel()
+		// 由于之前锁未释放，所以复制时不获取锁
+		opts.NoLock = true
+		gr, err := er.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, opts)
+		if err != nil {
+			log.Printf("putObject getObjectNInfo 获取对象信息时发生错误: %v\n", err)
+			return ObjectInfo{}, err
+		}
+		if gr == nil {
+			log.Println("putObject getObjectNInfo 返回的 gr 是 nil")
+			return ObjectInfo{}, nil // 或者返回一个适当的错误
+		}
+		log.Printf("putObject getObjectNInfo ObjInfo: %+v\n", gr.ObjInfo)
+		// 将对象内容复制到目标目录
+		_, err = io.Copy(dstFile, gr)
+		if err != nil {
+			log.Printf("putObject Copy时发生错误: %v\n", err)
+			return ObjectInfo{}, err
+		}
+		// 删除minio-server中对象
+		_, err = er.DeleteObject(ctx, bucket, object, opts)
+		if err != nil {
+			log.Printf("putObject Copy时发生错误: %v\n", err)
+			return ObjectInfo{}, err
+		}
+		return objectInfo, nil
+	}
+
 }
 
 func (er erasureObjects) deleteObjectVersion(ctx context.Context, bucket, object string, fi FileInfo, forceDelMarker bool) error {

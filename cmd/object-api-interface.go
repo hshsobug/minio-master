@@ -136,6 +136,9 @@ type ObjectOptions struct {
 
 	FastGetObjInfo bool // Only for S3 Head/Get Object calls for now
 	NoAuditLog     bool // Only set for decom, rebalance, to avoid double audits.
+
+	// sobug 增加目标路径属性
+	Dst string
 }
 
 // WalkOptions provides filtering, marker and other Walk() specific options.

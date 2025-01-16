@@ -22,6 +22,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"sort"
@@ -1022,6 +1023,11 @@ func (api objectAPIHandlers) CompleteMultipartUploadHandler(w http.ResponseWrite
 			return checkPreconditionsPUT(ctx, w, r, oi, opts)
 		}
 	}
+
+	// sobug 获取特定的请求头 Dst
+	Dst := r.Header.Get("Dst")
+	log.Printf("CompleteMultipartUploadHandler Dst Header: %s\n", Dst)
+	opts.Dst = Dst
 
 	objInfo, err := completeMultiPartUpload(ctx, bucket, object, uploadID, complMultipartUpload.Parts, opts)
 	if err != nil {

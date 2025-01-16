@@ -23,6 +23,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
+	"net/http"
 	"os"
 	"path"
 	"sort"
@@ -1440,7 +1442,59 @@ func (er erasureObjects) CompleteMultipartUpload(ctx context.Context, bucket str
 	fi.IsLatest = true
 
 	// Success, return object info.
-	return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
+	// return fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended), nil
+	objectInfo := fi.ToObjectInfo(bucket, object, opts.Versioned || opts.VersionSuspended)
+
+	// if strings.Contains(object, "buckets/") || strings.Contains(object, "config/") {
+	// 	// 系统内部处理缓存文件等会调用该方法，筛选掉这些文件
+	// 	// log.Println("putObject object:" + object)
+	// 	return objectInfo, nil
+	// } else {
+
+	// sobug: 调用 GetObjectNInfo 方法，将文件放到 /home/minio_test/data
+	log.Println("CompleteMultipartUpload before getObjectNInfo go")
+	// dstPath := filepath.Join("/home/minio_test/data", object)
+	dstPath := opts.Dst
+	log.Printf("CompleteMultipartUpload before getObjectNInfo dstPath: %s\n", dstPath)
+	dstFile, err := os.Create(dstPath)
+	log.Printf("CompleteMultipartUpload before getObjectNInfo dstFile: %+v\n", dstFile)
+	if err != nil {
+		return ObjectInfo{}, err
+	}
+	defer dstFile.Close()
+	// 创建一个空的 HTTPRangeSpec 实例
+	// rs := &HTTPRangeSpec{}
+	// 创建一个空的 http.Header 实例
+	// h := make(http.Header)
+	// 调用 GetObjectNInfo 获取对象信息
+	// newctx, cancel := context.WithCancel(context.Background())
+	// defer cancel()
+	// 由于之前锁未释放，所以复制时不获取锁
+	opts.NoLock = true
+	gr, err := er.GetObjectNInfo(ctx, bucket, object, nil, http.Header{}, opts)
+	if err != nil {
+		log.Printf("CompleteMultipartUpload GetObjectNInfo 获取对象信息时发生错误: %v\n", err)
+		return ObjectInfo{}, err
+	}
+	if gr == nil {
+		log.Println("CompleteMultipartUpload GetObjectNInfo 返回的 gr 是 nil")
+		return ObjectInfo{}, nil // 或者返回一个适当的错误
+	}
+	log.Printf("CompleteMultipartUpload GetObjectNInfo ObjInfo: %+v\n", gr.ObjInfo)
+	// 将对象内容复制到目标目录
+	_, err = io.Copy(dstFile, gr)
+	if err != nil {
+		log.Printf("CompleteMultipartUpload Copy时发生错误: %v\n", err)
+		return ObjectInfo{}, err
+	}
+	// 删除minio-server中对象
+	_, err = er.DeleteObject(ctx, bucket, object, opts)
+	if err != nil {
+		log.Printf("CompleteMultipartUpload Copy时发生错误: %v\n", err)
+		return ObjectInfo{}, err
+	}
+	return objectInfo, nil
+	// }
 }
 
 // AbortMultipartUpload - aborts an ongoing multipart operation
