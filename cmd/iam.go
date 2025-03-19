@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"path"
 	"sort"
@@ -2435,6 +2436,8 @@ func (sys *IAMSys) doesPolicyAllow(policy string, args policy.Args) bool {
 
 // IsAllowed - checks given policy args is allowed to continue the Rest API.
 func (sys *IAMSys) IsAllowed(args policy.Args) bool {
+	// Log the input
+	log.Printf("Checking if allowed for args: %v", args)
 	// If opa is configured, use OPA always.
 	if authz := newGlobalAuthZPluginFn(); authz != nil {
 		ok, err := authz.IsAllowed(args)
