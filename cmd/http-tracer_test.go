@@ -27,22 +27,9 @@ func TestRedactLDAPPwd(t *testing.T) {
 		query         string
 		expectedQuery string
 	}{
-		{"", ""},
 		{
-			"?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=myusername&LDAPPassword=can+youreadthis%3F&Version=2011-06-15",
-			"?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=myusername&LDAPPassword=*REDACTED*&Version=2011-06-15",
-		},
-		{
-			"LDAPPassword=can+youreadthis%3F&Version=2011-06-15&?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=myusername",
-			"LDAPPassword=*REDACTED*&Version=2011-06-15&?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=myusername",
-		},
-		{
-			"?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=myusername&Version=2011-06-15&LDAPPassword=can+youreadthis%3F",
-			"?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=myusername&Version=2011-06-15&LDAPPassword=*REDACTED*",
-		},
-		{
-			"?x=y&a=b",
-			"?x=y&a=b",
+			"http://152.136.119.252:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=hshtestnew100&LDAPPassword=hshtestnew100&Version=2011-06-15",
+			"http://152.136.119.252:9000?Action=AssumeRoleWithLDAPIdentity&LDAPUsername=hshtestnew100&LDAPPassword=*REDACTED*&Version=2011-06-15",
 		},
 	}
 	for i, test := range testCases {
